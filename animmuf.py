@@ -22,18 +22,28 @@ SOURCE_JSON = NOAA + "/products/animations/ctipe_muf.json"
 
 RE_TIME = re.compile(r'.*_(\d+T\d+).png').match
 
-logger = None
+logging.basicConfig(
+  format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
+  datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('animmuf')
 
 def read_config():
-  config_path = ('.', os.path.expanduser('~'), os.path.expanduser('~/.local'), '/etc')
-  for path in config_path:
-    filename = os.path.join(path, CONFIG_NAME)
+  config_path = (
+    os.path.join('.', CONFIG_NAME),
+    os.path.join(os.path.expanduser('~'), '.' + CONFIG_NAME),
+    os.path.join(os.path.expanduser('~'), '.local', CONFIG_NAME),
+    os.path.join('/etc', CONFIG_NAME),
+  )
+  for filename in config_path:
     if os.path.exists(filename):
       break
+    logger.debug('Config file "%s" not found', filename)
   else:
-    logger.error('Configuration file "%s" not found', CONFIG_NAME)
+    logger.error('No Configuration file found', CONFIG_NAME)
     sys.exit(os.EX_CONFIG)
 
+  logger.debug('Reading config file "%s"', filename)
   with open(filename, 'r', encoding='utf-8') as confd:
     config = yaml.safe_load(confd)
   return type('Config', (object,), config)
@@ -127,11 +137,6 @@ def gen_video(config):
 
 def main(args=sys.argv[:1]):
   global logger
-  logging.basicConfig(
-    format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-  )
-  logger = logging.getLogger('animmuf')
   logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
 
   config = read_config()
