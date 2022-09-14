@@ -40,7 +40,7 @@ def read_config():
       break
     logger.debug('Config file "%s" not found', filename)
   else:
-    logger.error('No Configuration file found', CONFIG_NAME)
+    logger.error('No Configuration file found')
     sys.exit(os.EX_CONFIG)
 
   logger.debug('Reading config file "%s"', filename)
