@@ -1,0 +1,7 @@
+---
+target_dir: /tmp/muf
+converter: /Users/fred/tmp/convert.sh
+muf_file: /tmp/muf/muf_source.json
+video_file: /tmp/muf/muf.mp4
+font: /System/Library/Fonts/Supplemental/Arial Narrow.ttf
+font_size: 16
