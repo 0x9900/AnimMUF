@@ -5,22 +5,18 @@ import gc
 import json
 import logging
 import os
-import re
 import sys
-import yaml
 
 from subprocess import Popen, PIPE
 
 from urllib.request import urlretrieve
-from datetime import datetime, timedelta
 
 from PIL import Image, ImageFont, ImageDraw
+import yaml
 
 CONFIG_NAME = 'animmuf.yaml'
 NOAA = "https://services.swpc.noaa.gov/experimental"
 SOURCE_JSON = NOAA + "/products/animations/ctipe_muf.json"
-
-RE_TIME = re.compile(r'.*_(\d+T\d+).png').match
 
 logging.basicConfig(
   format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
@@ -29,10 +25,11 @@ logging.basicConfig(
 logger = logging.getLogger('animmuf')
 
 def read_config():
+  home = os.path.expanduser('~')
   config_path = (
     os.path.join('.', CONFIG_NAME),
-    os.path.join(os.path.expanduser('~'), '.' + CONFIG_NAME),
-    os.path.join(os.path.expanduser('~'), '.local', CONFIG_NAME),
+    os.path.join(home, '.' + CONFIG_NAME),
+    os.path.join(home, '.local', CONFIG_NAME),
     os.path.join('/etc', CONFIG_NAME),
   )
   for filename in config_path:
@@ -47,11 +44,6 @@ def read_config():
   with open(filename, 'r', encoding='utf-8') as confd:
     config = yaml.safe_load(confd)
   return type('Config', (object,), config)
-
-
-def extract_time(name):
-  str_time = RE_TIME(name).group(1)
-  return datetime.strptime(str_time, '%Y%m%dT%H%M%S')
 
 
 def retreive_files(config):
@@ -69,18 +61,21 @@ def retreive_files(config):
 
 
 def cleanup(config):
-  logger.info('Cleaning up old MUF images')
-  expire_time = datetime.utcnow() - timedelta(days=1, hours=12)
+  """Cleanup old muf image that are not present in the json manifest"""
+  logger.info('Cleaning up non active MUF images')
+  current_files = set([])
+  with open(config.muf_file, 'r', encoding='utf-8') as fdm:
+    data = json.load(fdm)
+    for entry in data:
+      current_files.add(os.path.basename(entry['url']))
+
   for name in os.listdir(config.target_dir):
-    if not name.startswith('CTIPe-MUF'):
-      continue
-    try:
-      file_d = extract_time(name)
-      if file_d < expire_time:
+    if name.startswith('CTIPe-MUF') and name not in current_files:
+      try:
         os.unlink(os.path.join(config.target_dir, name))
         logger.info('Delete file: %s', name)
-    except IOError as err:
-      logger.error(err)
+      except IOError as exp:
+        logger.error(exp)
 
 
 def animate(config):
@@ -126,17 +121,16 @@ def gen_video(config):
     return
 
   cmd = f'{config.converter} {gif_file} {config.video_file}'
-  with open(logfile, "w") as err:
-    print(cmd, file=err)
-    proc = Popen(cmd.split(), shell=False, stdout=PIPE, stderr=err)
-  logger.info(f"Saving %s video file", config.video_file)
-  proc.wait()
+  with open(logfile, "w", encoding='utf-8') as fdlog:
+    print(cmd, file=fdlog)
+    with Popen(cmd.split(), shell=False, stdout=PIPE, stderr=fdlog) as proc:
+      logger.info("Saving %s video file", config.video_file)
+      proc.wait()
   if proc.returncode != 0:
     logger.error('Error generating the video file. Status code: %d', proc.returncode)
 
 
-def main(args=sys.argv[:1]):
-  global logger
+def main():
   logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
 
   config = read_config()
