@@ -79,6 +79,11 @@ def cleanup(config):
 
 
 def animate(config):
+  try:
+    resampling = Image.Resampling.LANCZOS # This if for new versions of PIL
+  except AttributeError:
+    resampling = Image.LANCZOS            # Older versions of PIL
+
   # suitables image size (1290, 700) (640, 400) (800, 600)
   img_size = (800, 600)
   font = ImageFont.truetype(config.font, int(config.font_size))
@@ -96,7 +101,7 @@ def animate(config):
     logger.debug('Add %s', name)
     image = Image.open(os.path.join(config.target_dir, name))
     image = image.convert('RGB')
-    image = image.resize(img_size, Image.Resampling.LANCZOS)
+    image = image.resize(img_size, resampling)
     draw = ImageDraw.Draw(image)
     draw.text((25, 555), "W6BSD - MUF 36 hours animation", font=font, fill="gray")
     image_list.append(image)
