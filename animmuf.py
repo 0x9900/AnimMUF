@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 from subprocess import Popen, PIPE
 
@@ -46,9 +47,16 @@ def read_config():
   return type('Config', (object,), config)
 
 
-def retreive_files(config):
+def retrieve_files(config):
+  try:
+    file_time = os.stat(config.muf_file).st_mtime
+    if time.time() - file_time < 3600:
+      return
+  except FileNotFoundError:
+    pass
+
   urlretrieve(SOURCE_JSON, config.muf_file)
-  logger.debug('Downloading: %s, into: %s', SOURCE_JSON, config.muf_file)
+  logger.info('Downloading: %s, into: %s', SOURCE_JSON, config.muf_file)
   with open(config.muf_file, 'r', encoding='utf-8') as fdin:
     data_source = json.load(fdin)
     for url in data_source:
@@ -148,7 +156,7 @@ def main():
     logger.error("The target directory %s does not exist", config.target_dir)
     return
 
-  retreive_files(config)
+  retrieve_files(config)
   cleanup(config)
   if opts.no_video:
     animate(config)
