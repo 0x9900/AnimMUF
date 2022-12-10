@@ -111,7 +111,7 @@ def animate(config):
     image = image.convert('RGB')
     image = image.resize(img_size, resampling)
     draw = ImageDraw.Draw(image)
-    draw.text((25, 555), "W6BSD - MUF 36 hours animation", font=font, fill="gray")
+    draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
     image_list.append(image)
 
   if len(image_list) > 2:
