@@ -7,13 +7,11 @@ import logging
 import os
 import sys
 import time
-
-from subprocess import Popen, PIPE
-
+from subprocess import PIPE, Popen
 from urllib.request import urlretrieve
 
-from PIL import Image, ImageFont, ImageDraw
 import yaml
+from PIL import Image, ImageDraw, ImageFont
 
 CONFIG_NAME = 'animmuf.yaml'
 NOAA = "https://services.swpc.noaa.gov/experimental"
