@@ -2,7 +2,7 @@
 #
 import sys
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 __author__ = "Fred C. (W6BSD)"
 __version__ = '1.0.1'
