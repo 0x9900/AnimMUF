@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 CONFIG_NAME = 'animmuf.yaml'
 NOAA = "https://services.swpc.noaa.gov/experimental"
 SOURCE_JSON = NOAA + "/products/animations/ctipe_muf.json"
+RESAMPLING = Image.Resampling.LANCZOS
 
 logging.basicConfig(
   format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
@@ -91,10 +92,6 @@ def cleanup(config):
 
 def animate(config):
   target_dir = pathlib.Path(config.target_dir)
-  try:
-    resampling = Image.Resampling.LANCZOS  # This if for new versions of PIL
-  except AttributeError:
-    resampling = Image.LANCZOS            # Older versions of PIL
 
   # suitables image size (1290, 700) (640, 400) (800, 600)
   img_size = (800, 600)
@@ -108,7 +105,7 @@ def animate(config):
     logger.debug('Add %s', filename.name)
     image = Image.open(filename)
     image = image.convert('RGB')
-    image = image.resize(img_size, resampling)
+    image = image.resize(img_size, RESAMPLING)
     draw = ImageDraw.Draw(image)
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
     image_list.append(image)
