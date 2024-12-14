@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
-import argparse
-import gc
 import json
 import logging
 import os
 import pathlib
+import shutil
 import sys
 import time
+from dataclasses import dataclass, field
 from subprocess import PIPE, Popen
+from typing import Iterator, Optional, Tuple, Type
 from urllib.request import urlretrieve
 
 import yaml
@@ -18,6 +19,8 @@ CONFIG_NAME = 'animmuf.yaml'
 NOAA = "https://services.swpc.noaa.gov/experimental"
 SOURCE_JSON = NOAA + "/products/animations/ctipe_muf.json"
 RESAMPLING = Image.Resampling.LANCZOS
+DEFAULT_FONT = "/System/Library/Fonts/Supplemental/Arial Narrow.ttf"
+IMG_SIZE = (800, 600)  # suitables image size (1290, 700) (640, 400) (800, 600)
 
 logging.basicConfig(
   format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
@@ -26,7 +29,42 @@ logging.basicConfig(
 logger = logging.getLogger('animmuf')
 
 
-def read_config():
+@dataclass(slots=True)
+class Config:
+  target_dir: pathlib.Path
+  converter: pathlib.Path
+  muf_file: pathlib.Path
+  video_file: pathlib.Path
+  font: pathlib.Path = field(default_factory=lambda: pathlib.Path(DEFAULT_FONT))
+  font_size: int = field(default=16)
+  image_size: Tuple[int, int] = field(default=IMG_SIZE)
+
+  def __post_init__(self):
+    # pylint: disable=no-member
+    for name, _field in self.__dataclass_fields__.items():
+      value = getattr(self, name)
+      if isinstance(value, str):
+        setattr(self, name, pathlib.Path(value))
+
+
+class Workdir:
+  def __init__(self, source: pathlib.Path) -> None:
+    self.workdir = source.joinpath('_workdir')
+
+  def __enter__(self) -> pathlib.Path:
+    try:
+      self.workdir.mkdir()
+      return self.workdir
+    except IOError as err:
+      raise err
+
+  def __exit__(self, exc_type: Optional[Type[BaseException]],
+               exc_value: Optional[BaseException],
+               traceback: Optional[Type[BaseException]]) -> None:
+    shutil.rmtree(self.workdir)
+
+
+def read_config() -> Config:
   home = pathlib.Path('~').expanduser()
   config_path = (
     pathlib.Path('.').joinpath(CONFIG_NAME),
@@ -45,43 +83,40 @@ def read_config():
   logger.debug('Reading config file "%s"', filename)
   with filename.open('r', encoding='utf-8') as confd:
     config = yaml.safe_load(confd)
-  return type('Config', (object,), config)
+  return Config(**config)
 
 
-def retrieve_files(config):
-  muf_file = pathlib.Path(config.muf_file)
+def retrieve_files(config: Config) -> None:
   try:
-    file_time = muf_file.stat().st_mtime
+    file_time = config.muf_file.stat().st_mtime
     if time.time() - file_time < 3600:
       return
   except FileNotFoundError:
     pass
 
-  logger.info('Downloading: %s, into: %s', SOURCE_JSON, muf_file)
-  urlretrieve(SOURCE_JSON, muf_file)
-  with muf_file.open('r', encoding='utf-8') as fdin:
+  logger.info('Downloading: %s, into: %s', SOURCE_JSON, config.muf_file)
+  urlretrieve(SOURCE_JSON, config.muf_file)
+  with config.muf_file.open('r', encoding='utf-8') as fdin:
     data_source = json.load(fdin)
     for url in data_source:
       filename = pathlib.Path(url['url'])
-      target_name = pathlib.Path(config.target_dir).joinpath(filename.name)
+      target_name = config.target_dir.joinpath(filename.name)
       if target_name.exists():
         continue
       urlretrieve(NOAA + url['url'], target_name)
       logger.info('%s saved', target_name)
 
 
-def cleanup(config):
+def cleanup(config: Config) -> None:
   """Cleanup old muf image that are not present in the json manifest"""
   logger.info('Cleaning up non active MUF images')
-  muf_file = pathlib.Path(config.muf_file)
   current_files = set([])
-  with muf_file.open('r', encoding='utf-8') as fdm:
+  with config.muf_file.open('r', encoding='utf-8') as fdm:
     data = json.load(fdm)
     for entry in data:
       current_files.add(pathlib.Path(entry['url']).name)
 
-  target_dir = pathlib.Path(config.target_dir)
-  for filename in target_dir.glob('CTIPe-MUF_*'):
+  for filename in config.target_dir.glob('CTIPe-MUF_*'):
     if filename.name not in current_files:
       try:
         filename.unlink()
@@ -90,81 +125,83 @@ def cleanup(config):
         logger.error(exp)
 
 
-def animate(config):
-  target_dir = pathlib.Path(config.target_dir)
+def counter(start: int = 1) -> Iterator[str]:
+  cnt = start
+  while True:
+    yield f'{cnt:06d}'
+    cnt += 1
 
-  # suitables image size (1290, 700) (640, 400) (800, 600)
-  img_size = (800, 600)
+
+def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib.Path) -> None:
   font = ImageFont.truetype(config.font, int(config.font_size))
-  animation = target_dir.joinpath('muf.gif')
-  image_list = []
-
-  file_list = sorted(target_dir.glob('CTIPe-MUF_*'))
-  logger.info('Processing: %d images', len(file_list))
-  for filename in file_list:
-    logger.debug('Add %s', filename.name)
-    image = Image.open(filename)
+  try:
+    image = Image.open(image_path)
     image = image.convert('RGB')
-    image = image.resize(img_size, RESAMPLING)
+    image = image.resize(config.image_size, RESAMPLING)
     draw = ImageDraw.Draw(image)
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
-    image_list.append(image)
-
-  if len(image_list) > 2:
-    logger.info('Saving animation into %s', animation)
-    image_list[0].save(animation, save_all=True, duration=75, loop=0,
-                       append_images=image_list[1:])
-  else:
-    logger.info('Nothing to animate')
-
-  del image_list
-  gc.collect()
+    image.save(output_path)
+    logger.info('Save: %s', output_path)
+  except Exception as err:
+    logger.warning('Error processing %s: %s', image_path, err)
 
 
-def gen_video(config):
-  target_dir = pathlib.Path(config.target_dir)
-  logfile = target_dir.joinpath('muf.log')
-  gif_file = target_dir.joinpath('muf.gif')
+def select_files(config,  workdir) -> None:
+  count = counter()
+  file_list = sorted(config.target_dir.glob('CTIPe-MUF_*'))
+  logger.info('Processing: %d images', len(file_list))
+  for image_path in file_list:
+    output_path = workdir.joinpath(f'CTIPe-MUF-{next(count)}.png')
+    process_image(config, image_path, output_path)
 
-  converter = pathlib.Path(config.converter)
-  if not converter.exists():
-    logger.error('Video converter %s not found', config.converter)
-    return
 
-  cmd = f'{converter} {gif_file} {config.video_file}'
-  with logfile.open("w", encoding='utf-8') as fdlog:
-    print(cmd, file=fdlog)
-    with Popen(cmd.split(), shell=False, stdout=PIPE, stderr=fdlog) as proc:
-      logger.info("Saving %s video file", config.video_file)
+def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
+  ffmpeg = shutil.which('ffmpeg')
+  if not ffmpeg:
+    raise FileNotFoundError('ffmpeg not found')
+
+  logfile = pathlib.Path('/tmp/animmuf.log')
+  tmp_file = workdir.joinpath(f'video-{os.getpid()}.mp4')
+  pngfiles = workdir.joinpath('CTIPe-MUF-*.png')
+
+  in_args: list[str] = f'-y -framerate 10 -pattern_type glob -i {pngfiles}'.split()
+  ou_args: list[str] = '-crf 23 -c:v libx264 -pix_fmt yuv420p'.split()
+  cmd = [ffmpeg, *in_args, *ou_args, str(tmp_file)]
+  txt_cmd = ' '.join(cmd)
+
+  logger.info('Writing ffmpeg output in %s', logfile)
+  logger.info("Saving %s video file", tmp_file)
+  with logfile.open("a", encoding='ascii') as err:
+    err.write(txt_cmd)
+    err.write('\n\n')
+    err.flush()
+    with Popen(cmd, shell=False, stdout=PIPE, stderr=err) as proc:
       proc.wait()
-  if proc.returncode != 0:
-    logger.error('Error generating the video file. Status code: %d', proc.returncode)
+    if proc.returncode != 0:
+      logger.error('Error generating the video file')
+      return
+    logger.info('mv %s %s', tmp_file, video_file)
+    tmp_file.rename(video_file)
 
 
-def main():
+def main() -> None:
   logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
 
   config = read_config()
-  parser = argparse.ArgumentParser(description='MUF animation')
-  parser.add_argument('-v', '--no-video', action='store_false', default=True,
-                      help='Produce an mp4 video')
-  opts = parser.parse_args()
-
-  if not os.path.isdir(config.target_dir):
+  if not config.target_dir.is_dir():
     logger.error("The target directory %s does not exist", config.target_dir)
     return
 
   retrieve_files(config)
   cleanup(config)
-  if opts.no_video:
-    animate(config)
-    gen_video(config)
+  try:
+    with Workdir(config.target_dir) as workdir:
+      select_files(config, workdir)
+      gen_video(config.video_file, workdir)
+  except IOError as err:
+    logging.error(err)
+    raise SystemExit(err) from None
 
 
 if __name__ == "__main__":
-  try:
-    main()
-  except KeyboardInterrupt as err:
-    print(err)
-  finally:
-    sys.exit()
+  main()

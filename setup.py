@@ -2,7 +2,7 @@
 #
 import sys
 
-from setuptools import find_packages, setup
+from setuptools import setup
 
 __author__ = "Fred C. (W6BSD)"
 __version__ = '1.0.1'
@@ -26,14 +26,14 @@ setup(
   long_description=long_description,
   long_description_content_type='text/markdown',
   url='https://0x9900.com/',
-  project_urls = URLS,
+  project_urls=URLS,
   license=__license__,
   author=__author__,
   author_email='w6bsd@bsdworld.org',
   py_modules=['animmuf'],
   python_requires=">=3.8.0",
   install_requires=['matplotlib'],
-  entry_points = {
+  entry_points={
     'console_scripts': [
       'animmuf = animmuf:main'
     ],
