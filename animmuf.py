@@ -140,13 +140,13 @@ def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib
     image = image.resize(config.image_size, RESAMPLING)
     draw = ImageDraw.Draw(image)
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
-    image.save(output_path)
+    image.save(output_path, format="PNG")
     logger.info('Save: %s', output_path)
   except Exception as err:
     logger.warning('Error processing %s: %s', image_path, err)
 
 
-def select_files(config,  workdir) -> None:
+def select_files(config: Config,  workdir: pathlib.Path) -> None:
   count = counter()
   file_list = sorted(config.target_dir.glob('CTIPe-MUF_*'))
   logger.info('Processing: %d images', len(file_list))
