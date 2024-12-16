@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import logging
 import os
 import pathlib
 import shutil
 import sys
-import time
+import urllib.request
 from dataclasses import dataclass, field
 from subprocess import PIPE, Popen
-from typing import Iterator, Optional, Tuple, Type
-from urllib.request import urlretrieve
+from typing import Iterator, Optional, Tuple, Type, Union
 
 import yaml
 from PIL import Image, ImageDraw, ImageFont
@@ -33,7 +33,6 @@ logger = logging.getLogger('animmuf')
 @dataclass(slots=True)
 class Config:
   target_dir: pathlib.Path
-  converter: pathlib.Path
   muf_file: pathlib.Path
   video_file: pathlib.Path
   font: pathlib.Path = field(default_factory=lambda: pathlib.Path(DEFAULT_FONT))
@@ -87,37 +86,72 @@ def read_config() -> Config:
   return Config(**config)
 
 
-def retrieve_files(config: Config) -> None:
-  try:
-    file_time = config.muf_file.stat().st_mtime
-    if time.time() - file_time < 3600:
-      return
-  except FileNotFoundError:
-    pass
+def get_etag(url: str) -> str | None:
+  req = urllib.request.Request(url, method='HEAD')
+  with urllib.request.urlopen(req) as response:
+    return response.headers.get('ETag')
 
-  logger.info('Downloading: %s, into: %s', SOURCE_JSON, config.muf_file)
-  urlretrieve(SOURCE_JSON, config.muf_file)
-  with config.muf_file.open('r', encoding='utf-8') as fdin:
+
+def download_with_etag(url: str, filename: pathlib.Path, etag: Union[str, None] = None) -> bool:
+  # Returns True if a new file has been downloaded False otherwise.
+  headers = {}
+  if etag:
+    headers['If-None-Match'] = etag
+
+  req = urllib.request.Request(url, headers=headers)
+  try:
+    with urllib.request.urlopen(req) as response:
+      if response.status == 200:
+        urllib.request.urlretrieve(url, filename)
+        return True
+      if response.status == 304:
+        logging.info("File not modified since last download.")
+        return False
+  except urllib.error.HTTPError as e:
+    if e.code == 304:
+      logging.info("File not modified since last download.")
+      return False
+    raise
+  return False
+
+
+def retrieve_files(src_json: pathlib.Path, target_dir: pathlib.Path) -> bool:
+  if not src_json.exists():
+    new_file = download_with_etag(SOURCE_JSON, src_json)
+  else:
+    etag = get_etag(SOURCE_JSON)
+    new_file = download_with_etag(SOURCE_JSON, src_json, etag)
+
+  if not new_file:
+    logging.info('No new version of %s', src_json.name)
+    return False
+
+  logging.info('New %s file has been downloaded: processing', src_json)
+  with src_json.open('r', encoding='utf-8') as fdin:
     data_source = json.load(fdin)
     for url in data_source:
-      filename = pathlib.Path(url['url'])
-      target_name = config.target_dir.joinpath(filename.name)
-      if target_name.exists():
-        continue
-      urlretrieve(NOAA + url['url'], target_name)
-      logger.info('%s saved', target_name)
+      retrieve_image(pathlib.Path(url['url']), target_dir)
+  return True
 
 
-def cleanup(config: Config) -> None:
+def retrieve_image(source_path: pathlib.Path, target_dir: pathlib.Path) -> None:
+  target_name = target_dir.joinpath(source_path.name)
+  if target_name.exists():
+    return
+  urllib.request.urlretrieve(NOAA + str(source_path), target_name)
+  logger.info('%s saved', target_name)
+
+
+def cleanup(muf_file: pathlib.Path, target_dir: pathlib.Path) -> None:
   """Cleanup old muf image that are not present in the json manifest"""
   logger.info('Cleaning up non active MUF images')
   current_files = set([])
-  with config.muf_file.open('r', encoding='utf-8') as fdm:
+  with muf_file.open('r', encoding='utf-8') as fdm:
     data = json.load(fdm)
     for entry in data:
       current_files.add(pathlib.Path(entry['url']).name)
 
-  for filename in config.target_dir.glob('CTIPe-MUF_*'):
+  for filename in target_dir.glob('CTIPe-MUF_*'):
     if filename.name not in current_files:
       try:
         filename.unlink()
@@ -196,16 +230,24 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
     tmp_file.rename(video_file)
 
 
-def main() -> None:
+def main() -> int:
   logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
+
+  parser = argparse.ArgumentParser(description='Generate the MUF animation')
+  parser.add_argument('-f', '--force', action="store_true", default=False,
+                      help="Create the video, even if there is no new data")
+  opts = parser.parse_args()
 
   config = read_config()
   if not config.target_dir.is_dir():
     logger.error("The target directory %s does not exist", config.target_dir)
-    return
+    return os.EX_IOERR
 
-  retrieve_files(config)
-  cleanup(config)
+  if not retrieve_files(config.muf_file, config.target_dir) and not opts.force:
+    logger.warning('No new images to process')
+    return os.EX_OK
+
+  cleanup(config.muf_file, config.target_dir)
   try:
     with Workdir(config.target_dir) as workdir:
       select_files(config, workdir)
@@ -213,7 +255,8 @@ def main() -> None:
   except IOError as err:
     logging.error(err)
     raise SystemExit(err) from None
+  return os.EX_OK
 
 
 if __name__ == "__main__":
-  main()
+  sys.exit(main())
