@@ -21,6 +21,7 @@ SOURCE_JSON = NOAA + "/products/animations/ctipe_muf.json"
 RESAMPLING = Image.Resampling.LANCZOS
 DEFAULT_FONT = "/System/Library/Fonts/Supplemental/Arial Narrow.ttf"
 IMG_SIZE = (800, 600)  # suitables image size (1290, 700) (640, 400) (800, 600)
+MARGIN_COLOR = (0xcf, 0xcf, 0xcf)
 
 logging.basicConfig(
   format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
@@ -132,6 +133,16 @@ def counter(start: int = 1) -> Iterator[str]:
     cnt += 1
 
 
+def add_margin(image: Image.Image, top: int, right: int, bottom: int, left: int) -> Image.Image:
+  color = MARGIN_COLOR
+  width, height = image.size
+  new_width = width + right + left
+  new_height = height + top + bottom
+  new_image = Image.new(image.mode, (new_width, new_height), color)
+  new_image.paste(image, (left, top))
+  return new_image
+
+
 def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib.Path) -> None:
   font = ImageFont.truetype(config.font, int(config.font_size))
   try:
@@ -140,6 +151,7 @@ def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib
     image = image.resize(config.image_size, RESAMPLING)
     draw = ImageDraw.Draw(image)
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
+    image = add_margin(image, 0, 0, 50, 0)
     image.save(output_path, format="PNG")
     logger.info('Save: %s', output_path)
   except Exception as err:
