@@ -151,7 +151,7 @@ def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib
     image = image.resize(config.image_size, RESAMPLING)
     draw = ImageDraw.Draw(image)
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
-    image = add_margin(image, 0, 0, 50, 0)
+    image = add_margin(image, 0, 0, 40, 0)
     image.save(output_path, format="PNG")
     logger.info('Save: %s', output_path)
   except Exception as err:
