@@ -10,7 +10,7 @@ import sys
 import urllib.request
 from dataclasses import dataclass, field
 from subprocess import PIPE, Popen
-from typing import Iterator, Optional, Tuple, Type
+from typing import Optional, Tuple, Type
 
 import yaml
 from PIL import Image, ImageDraw, ImageFont
@@ -153,13 +153,6 @@ def cleanup(muf_file: pathlib.Path, target_dir: pathlib.Path) -> None:
         logger.error(exp)
 
 
-def counter(start: int = 1) -> Iterator[str]:
-  cnt = start
-  while True:
-    yield f'{cnt:06d}'
-    cnt += 1
-
-
 def add_margin(image: Image.Image, top: int, right: int, bottom: int, left: int) -> Image.Image:
   color = MARGIN_COLOR
   width, height = image.size
@@ -179,19 +172,21 @@ def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib
     draw = ImageDraw.Draw(image)
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
     image = add_margin(image, 0, 0, 40, 0)
-    image.save(output_path, format="PNG")
+    image.save(output_path, format="jpeg")
     logger.debug('Save: %s', output_path)
   except Exception as err:
     logger.warning('Error processing %s: %s', image_path, err)
 
 
-def select_files(config: Config,  workdir: pathlib.Path) -> None:
-  count = counter()
+def select_files(config: Config,  workdir: pathlib.Path) -> int:
   file_list = sorted(config.target_dir.glob('CTIPe-MUF_*'))
+  if not file_list:
+    return 0
   logger.info('Processing: %d images', len(file_list))
-  for image_path in file_list:
-    output_path = workdir.joinpath(f'CTIPe-MUF-{next(count)}.png')
+  for count, image_path in enumerate(file_list):
+    output_path = workdir.joinpath(f'CTIPe-MUF-{count:04d}.jpg')
     process_image(config, image_path, output_path)
+  return len(file_list)
 
 
 def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
@@ -201,9 +196,9 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
 
   logfile = pathlib.Path('/tmp/animmuf.log')
   tmp_file = workdir.joinpath(f'video-{os.getpid()}.mp4')
-  pngfiles = workdir.joinpath('CTIPe-MUF-*.png')
+  muf_files = workdir.joinpath('CTIPe-MUF-*.jpg')
 
-  in_args: list[str] = f'-y -framerate 10 -pattern_type glob -i {pngfiles}'.split()
+  in_args: list[str] = f'-y -framerate 10 -pattern_type glob -i {muf_files}'.split()
   ou_args: list[str] = '-crf 23 -c:v libx264 -pix_fmt yuv420p'.split()
   cmd = [ffmpeg, *in_args, *ou_args, str(tmp_file)]
   txt_cmd = ' '.join(cmd)
@@ -243,8 +238,10 @@ def main() -> int:
   cleanup(config.muf_file, config.target_dir)
   try:
     with Workdir(config.target_dir) as workdir:
-      select_files(config, workdir)
-      gen_video(config.video_file, workdir)
+      if select_files(config, workdir) > 1:
+        gen_video(config.video_file, workdir)
+      else:
+        logging.warning('No MUF files selected')
   except IOError as err:
     logging.error(err)
     raise SystemExit(err) from None
