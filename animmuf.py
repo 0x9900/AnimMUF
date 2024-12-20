@@ -194,7 +194,7 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
   if not ffmpeg:
     raise FileNotFoundError('ffmpeg not found')
 
-  logfile = pathlib.Path('/tmp/animmuf.log')
+  logfile = pathlib.Path('/tmp/animmuf-ffmpeg.log')
   tmp_file = workdir.joinpath(f'video-{os.getpid()}.mp4')
   muf_files = workdir.joinpath('CTIPe-MUF-*.jpg')
 
