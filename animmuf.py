@@ -180,7 +180,7 @@ def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
     image = add_margin(image, 0, 0, 40, 0)
     image.save(output_path, format="PNG")
-    logger.info('Save: %s', output_path)
+    logger.debug('Save: %s', output_path)
   except Exception as err:
     logger.warning('Error processing %s: %s', image_path, err)
 
