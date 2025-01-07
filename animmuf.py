@@ -20,7 +20,7 @@ NOAA = "https://services.swpc.noaa.gov/experimental"
 SOURCE_JSON = NOAA + "/products/animations/ctipe_muf.json"
 RESAMPLING = Image.Resampling.LANCZOS
 DEFAULT_FONT = "/System/Library/Fonts/Supplemental/Arial Narrow.ttf"
-IMG_SIZE = (800, 600)  # suitables image size (1290, 700) (640, 400) (800, 600)
+IMG_SIZE = (800, 440)  # suitables image size (1290, 700) (640, 400) (800, 600)
 MARGIN_COLOR = (0xcf, 0xcf, 0xcf)
 
 logging.basicConfig(
@@ -228,9 +228,7 @@ def mk_thumbnail(target_dir: pathlib.Path) -> None:
 
   image = Image.open(tn_source)
   image = image.convert('RGB')
-  ratio = image.size[0] / IMG_SIZE[0]
-  img_size = (int(image.size[0] / ratio), int(image.size[1] / ratio))
-  image.thumbnail(img_size)
+  image.thumbnail(IMG_SIZE)
 
   if latest.exists():
     latest.unlink()
