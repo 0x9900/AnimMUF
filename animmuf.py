@@ -218,6 +218,26 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
     tmp_file.rename(video_file)
 
 
+def mk_thumbnail(target_dir: pathlib.Path) -> None:
+  muf_files = []
+  for filename in target_dir.glob('CTIPe-MUF_*'):
+    muf_files.append((filename.stat().st_ctime, filename))
+  muf_files.sort()
+  tn_source = muf_files.pop()[1]
+  latest = tn_source.with_name('latest.webp')
+
+  image = Image.open(tn_source)
+  image = image.convert('RGB')
+  ratio = image.size[0] / IMG_SIZE[0]
+  img_size = (int(image.size[0] / ratio), int(image.size[1] / ratio))
+  image.thumbnail(img_size)
+
+  if latest.exists():
+    latest.unlink()
+  image.save(latest, format="webp")
+  logger.info('Latest: %s', latest)
+
+
 def main() -> int:
   logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
 
@@ -234,6 +254,8 @@ def main() -> int:
   if not retrieve_files(config.muf_file, config.target_dir) and not opts.force:
     logger.warning('No new images to process')
     return os.EX_OK
+
+  mk_thumbnail(config.target_dir)
 
   cleanup(config.muf_file, config.target_dir)
   try:
