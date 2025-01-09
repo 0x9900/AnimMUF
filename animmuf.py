@@ -224,7 +224,7 @@ def mk_thumbnail(target_dir: pathlib.Path) -> None:
     muf_files.append((filename.stat().st_ctime, filename))
   muf_files.sort()
   tn_source = muf_files.pop()[1]
-  latest = tn_source.with_name('latest.webp')
+  latest = tn_source.with_name('latest.png')
 
   image = Image.open(tn_source)
   image = image.convert('RGB')
@@ -232,7 +232,7 @@ def mk_thumbnail(target_dir: pathlib.Path) -> None:
 
   if latest.exists():
     latest.unlink()
-  image.save(latest, format="webp")
+  image.save(latest, format="png")
   logger.info('Latest: %s', latest)
 
 
