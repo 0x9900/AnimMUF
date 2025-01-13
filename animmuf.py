@@ -229,7 +229,7 @@ def mk_thumbnail(target_dir: pathlib.Path) -> None:
 
   image = Image.open(tn_source)
   image = image.convert('RGB')
-  image.thumbnail((width, hight))
+  image = image.resize((width, hight))
 
   if latest.exists():
     latest.unlink()
