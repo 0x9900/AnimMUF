@@ -220,6 +220,7 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
 
 def mk_thumbnail(target_dir: pathlib.Path) -> None:
   muf_files = []
+  width, hight = (IMG_SIZE[0], int(IMG_SIZE[0] / (16 / 9)))
   for filename in target_dir.glob('CTIPe-MUF_*'):
     muf_files.append((filename.stat().st_ctime, filename))
   muf_files.sort()
@@ -228,7 +229,7 @@ def mk_thumbnail(target_dir: pathlib.Path) -> None:
 
   image = Image.open(tn_source)
   image = image.convert('RGB')
-  image.thumbnail(IMG_SIZE)
+  image.thumbnail((width, hight))
 
   if latest.exists():
     latest.unlink()
