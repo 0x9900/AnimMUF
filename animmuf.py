@@ -23,12 +23,6 @@ DEFAULT_FONT = "/System/Library/Fonts/Supplemental/Arial Narrow.ttf"
 IMG_SIZE = (800, 440)  # suitables image size (1290, 700) (640, 400) (800, 600)
 MARGIN_COLOR = (0xcf, 0xcf, 0xcf)
 
-logging.basicConfig(
-  format='%(asctime)s %(name)s:%(lineno)d %(levelname)s - %(message)s',
-  datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger('animmuf')
-
 
 @dataclass(slots=True)
 class Config:
@@ -75,12 +69,12 @@ def read_config() -> Config:
   for filename in config_path:
     if filename.exists():
       break
-    logger.debug('Config file "%s" not found', filename)
+    logging.debug('Config file "%s" not found', filename)
   else:
-    logger.error('No Configuration file found')
+    logging.error('No Configuration file found')
     sys.exit(os.EX_CONFIG)
 
-  logger.debug('Reading config file "%s"', filename)
+  logging.debug('Reading config file "%s"', filename)
   with filename.open('r', encoding='utf-8') as confd:
     config = yaml.safe_load(confd)
   return Config(**config)
@@ -132,12 +126,12 @@ def retrieve_image(source_path: pathlib.Path, target_dir: pathlib.Path) -> None:
   if target_name.exists():
     return
   urllib.request.urlretrieve(NOAA + str(source_path), target_name)
-  logger.info('%s saved', target_name)
+  logging.info('%s saved', target_name)
 
 
 def cleanup(muf_file: pathlib.Path, target_dir: pathlib.Path) -> None:
   """Cleanup old muf image that are not present in the json manifest"""
-  logger.info('Cleaning up non active MUF images')
+  logging.info('Cleaning up non active MUF images')
   current_files = set([])
   with muf_file.open('r', encoding='utf-8') as fdm:
     data = json.load(fdm)
@@ -148,9 +142,9 @@ def cleanup(muf_file: pathlib.Path, target_dir: pathlib.Path) -> None:
     if filename.name not in current_files:
       try:
         filename.unlink()
-        logger.info('Delete file: %s', filename)
+        logging.info('Delete file: %s', filename)
       except IOError as exp:
-        logger.error(exp)
+        logging.error(exp)
 
 
 def add_margin(image: Image.Image, top: int, right: int, bottom: int, left: int) -> Image.Image:
@@ -173,16 +167,16 @@ def process_image(config: Config, image_path: pathlib.Path, output_path: pathlib
     draw.text((25, 550), "MUF 36 hours animation\nhttps://bsdworld.org/", font=font, fill="gray")
     image = add_margin(image, 0, 0, 40, 0)
     image.save(output_path, format="jpeg")
-    logger.debug('Save: %s', output_path)
+    logging.debug('Save: %s', output_path)
   except Exception as err:
-    logger.warning('Error processing %s: %s', image_path, err)
+    logging.warning('Error processing %s: %s', image_path, err)
 
 
 def select_files(config: Config,  workdir: pathlib.Path) -> int:
   file_list = sorted(config.target_dir.glob('CTIPe-MUF_*'))
   if not file_list:
     return 0
-  logger.info('Processing: %d images', len(file_list))
+  logging.info('Processing: %d images', len(file_list))
   for count, image_path in enumerate(file_list):
     output_path = workdir.joinpath(f'CTIPe-MUF-{count:04d}.jpg')
     process_image(config, image_path, output_path)
@@ -203,8 +197,8 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
   cmd = [ffmpeg, *in_args, *ou_args, str(tmp_file)]
   txt_cmd = ' '.join(cmd)
 
-  logger.info('Writing ffmpeg output in %s', logfile)
-  logger.info("Saving %s video file", tmp_file)
+  logging.info('Writing ffmpeg output in %s', logfile)
+  logging.info("Saving %s video file", tmp_file)
   with logfile.open("a", encoding='ascii') as err:
     err.write(txt_cmd)
     err.write('\n\n')
@@ -212,9 +206,9 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
     with Popen(cmd, shell=False, stdout=PIPE, stderr=err) as proc:
       proc.wait()
     if proc.returncode != 0:
-      logger.error('Error generating the video file')
+      logging.error('Error generating the video file')
       return
-    logger.info('mv %s %s', tmp_file, video_file)
+    logging.info('mv %s %s', tmp_file, video_file)
     tmp_file.rename(video_file)
 
 
@@ -234,24 +228,17 @@ def mk_thumbnail(target_dir: pathlib.Path) -> None:
   if latest.exists():
     latest.unlink()
   image.save(latest, format="png")
-  logger.info('Latest: %s', latest)
+  logging.info('Latest: %s', latest)
 
 
-def main() -> int:
-  logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
-
-  parser = argparse.ArgumentParser(description='Generate the MUF animation')
-  parser.add_argument('-f', '--force', action="store_true", default=False,
-                      help="Create the video, even if there is no new data")
-  opts = parser.parse_args()
-
+def run(force: bool) -> int:
   config = read_config()
   if not config.target_dir.is_dir():
-    logger.error("The target directory %s does not exist", config.target_dir)
+    logging.error("The target directory %s does not exist", config.target_dir)
     return os.EX_IOERR
 
-  if not retrieve_files(config.muf_file, config.target_dir) and not opts.force:
-    logger.warning('No new images to process')
+  if not retrieve_files(config.muf_file, config.target_dir) and not force:
+    logging.warning('No new images to process')
     return os.EX_OK
 
   mk_thumbnail(config.target_dir)
@@ -267,6 +254,26 @@ def main() -> int:
     logging.error(err)
     raise SystemExit(err) from None
   return os.EX_OK
+
+
+def main() -> int:
+
+  log_file = None if os.isatty(sys.stdout.fileno()) else '/tmp/animmuf.log'
+  logging.basicConfig(
+    format='%(asctime)s %(name)s:%(lineno)3d %(levelname)s - %(message)s', datefmt='%x %X',
+    level=logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')),
+    filename=log_file
+  )
+
+  parser = argparse.ArgumentParser(description='Generate the MUF animation')
+  parser.add_argument('-f', '--force', action="store_true", default=False,
+                      help="Create the video, even if there is no new data")
+  opts = parser.parse_args()
+
+  logging.warning('Start')
+  status = run(opts.force)
+  logging.warning('Stop')
+  return status
 
 
 if __name__ == "__main__":
