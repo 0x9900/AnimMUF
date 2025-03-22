@@ -193,7 +193,7 @@ def gen_video(video_file: pathlib.Path, workdir: pathlib.Path) -> None:
   muf_files = workdir.joinpath('CTIPe-MUF-*.jpg')
 
   in_args: list[str] = f'-y -framerate 10 -pattern_type glob -i {muf_files}'.split()
-  ou_args: list[str] = '-crf 23 -c:v libx264 -pix_fmt yuv420p'.split()
+  ou_args: list[str] = '-g 10 -crf 23 -c:v libx264 -pix_fmt yuv420p'.split()
   cmd = [ffmpeg, *in_args, *ou_args, str(tmp_file)]
   txt_cmd = ' '.join(cmd)
 
