@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "animmuf"
+dynamic = ["version"]
+description = "Animate MUF maps"
+readme = "README.md"
+requires-python = ">=3.14"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Fred C.", email = "github-fred@hidzz.com" }
+]
+dependencies = [
+    "pyyaml",
+    "Pillow",
+    "build",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build",
+  "pre-commit",
+  "flake8",
+  "isort",
+  "pylint",
+  "ipython",
+  "ipdb",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "animmuf.__version__"}
+
+[project.urls]
+Source = "https://github.com/0x9900/animmuf/"
+Tracker = "https://github.com/0x9900/animmuf/issues"
+
+[project.scripts]
+animmuf = "animmuf:main"
+purge_ionos = "purge_ionos:main"
+
+[tool.setuptools]
+py-modules = ["animmuf", "purge_ionos"]
+
+[tool.mypy]
+disable_error_code = [
+  "import-untyped",
+  "annotation-unchecked",
+]
+
+[tool.ty.environment]
+python-version = "3.14"
